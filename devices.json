@@ -1,0 +1,32 @@
+{
+  "d955d4a2": {
+    "id": "d955d4a2",
+    "name": "核心交换机-1",
+    "ip": "172.17.2.254",
+    "vendor": "huawei",
+    "username": "wowo",
+    "password": "wowo@2012",
+    "port": 22,
+    "created_at": "2026-04-17T10:33:26.490969"
+  },
+  "337dc052": {
+    "id": "337dc052",
+    "name": "接入交换机-1",
+    "ip": "172.17.17.254",
+    "vendor": "huawei",
+    "username": "admin",
+    "password": "lngt@163.com",
+    "port": 22,
+    "created_at": "2026-04-17T10:33:26.490969"
+  },
+  "59874273": {
+    "id": "59874273",
+    "name": "172.17.17.120",
+    "ip": "172.17.17.120",
+    "vendor": "huawei",
+    "username": "admin",
+    "password": "lngt@163.com",
+    "port": 22,
+    "created_at": "2026-04-17T13:41:34.550181"
+  }
+}

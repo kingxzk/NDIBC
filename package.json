@@ -1,0 +1,9 @@
+{
+  "name": "network-device-management",
+  "version": "1.0.0",
+  "description": "网络设备巡检和配置备份软件",
+  "scripts": {
+    "dev": "python app.py"
+  },
+  "dependencies": {}
+}

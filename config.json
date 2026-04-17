@@ -1,0 +1,30 @@
+{
+  "app": {
+    "name": "网络设备巡检和配置备份软件",
+    "version": "1.0.0",
+    "port": 8443,
+    "debug": false,
+    "secret_key": "network-device-management-secret-key-2024"
+  },
+  "backup": {
+    "directory": "config_backups",
+    "retention_days": 30,
+    "max_backups_per_device": 100
+  },
+  "inspection": {
+    "report_directory": "inspection_reports",
+    "default_timeout": 30,
+    "max_output_length": 10000
+  },
+  "security": {
+    "password_encryption": true,
+    "session_timeout": 3600,
+    "max_login_attempts": 5
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "app.log",
+    "max_size_mb": 10,
+    "backup_count": 5
+  }
+}

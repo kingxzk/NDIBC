@@ -1,0 +1,1362 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>网络设备巡检和配置备份软件(ver0.4@窩窩)</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #4361ee;
+            --secondary-color: #3a0ca3;
+            --success-color: #4cc9f0;
+            --danger-color: #f72585;
+            --light-color: #f8f9fa;
+            --dark-color: #212529;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.5rem;
+        }
+        
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+            margin-bottom: 20px;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .card-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            padding: 1.2rem;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            border: none;
+            padding: 10px 25px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, var(--success-color), #4895ef);
+            border: none;
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, var(--danger-color), #b5179e);
+            border: none;
+        }
+        
+        .tab-content {
+            padding: 20px;
+            background: white;
+            border-radius: 0 0 15px 15px;
+            min-height: 500px;
+        }
+        
+        .nav-tabs {
+            border-bottom: 2px solid #dee2e6;
+        }
+        
+        .nav-tabs .nav-link {
+            border: none;
+            color: #6c757d;
+            font-weight: 600;
+            padding: 12px 25px;
+        }
+        
+        .nav-tabs .nav-link.active {
+            color: var(--primary-color);
+            border-bottom: 3px solid var(--primary-color);
+            background: transparent;
+        }
+        
+        .device-list-item {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.2s;
+        }
+        
+        .device-list-item:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .command-item {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-left: 4px solid var(--primary-color);
+        }
+        
+        .output-container {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            max-height: 400px;
+            overflow-y: auto;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        
+        .diff-added {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 2px 4px;
+            border-radius: 3px;
+            margin: 1px 0;
+        }
+        
+        .diff-removed {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 2px 4px;
+            border-radius: 3px;
+            margin: 1px 0;
+        }
+        
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
+        .status-success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .status-error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .modal-content {
+            border-radius: 15px;
+            border: none;
+        }
+        
+        .modal-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            border-radius: 15px 15px 0 0;
+        }
+        
+        .import-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 2px dashed #dee2e6;
+        }
+        
+        .import-section:hover {
+            border-color: var(--primary-color);
+            background: #e9ecef;
+        }
+        
+        .file-upload {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+        
+        .file-upload input[type="file"] {
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+        
+        .import-result {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .import-error {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
+        
+        .import-success {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark" style="background: rgba(0,0,0,0.2); backdrop-filter: blur(10px);">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="bi bi-router"></i> 网络设备管理平台(ver0.4@窩窩)
+            </a>
+            <div class="navbar-text">
+                <span id="current-time"></span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- 主内容区域 -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="mb-0"><i class="bi bi-gear-wide-connected"></i> 网络设备控制台</h4>
+                    </div>
+                    
+                    <!-- 标签页 -->
+                    <ul class="nav nav-tabs" id="mainTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="devices-tab" data-bs-toggle="tab" data-bs-target="#devices" type="button">
+                                <i class="bi bi-pc-display"></i> 设备管理
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="inspection-tab" data-bs-toggle="tab" data-bs-target="#inspection" type="button">
+                                <i class="bi bi-clipboard-check"></i> 设备巡检
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="backup-tab" data-bs-toggle="tab" data-bs-target="#backup" type="button">
+                                <i class="bi bi-cloud-arrow-down"></i> 配置备份
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="compare-tab" data-bs-toggle="tab" data-bs-target="#compare" type="button">
+                                <i class="bi bi-file-diff"></i> 配置对比
+                            </button>
+                        </li>
+                    </ul>
+                    
+                    <div class="tab-content" id="mainTabsContent">
+                        <!-- 设备管理标签页 -->
+                        <<div class="tab-pane fade show active" id="devices" role="tabpanel">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h5 class="mb-0"><i class="bi bi-plus-circle"></i> 添加设备</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <form id="addDeviceForm">
+                                                <div class="mb-3">
+                                                    <label class="form-label">设备名称</label>
+                                                    <input type="text" class="form-control" name="name" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">IP地址</label>
+                                                    <input type="text" class="form-control" name="ip" required placeholder="192.168.1.1">
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">设备厂商</label>
+                                                    <select class="form-select" name="vendor" required>
+                                                        <option value="cisco">Cisco</option>
+                                                        <option value="huawei">华为</option>
+                                                        <option value="h3c">H3C</option>
+                                                        <option value="ruijie">锐捷</option>
+                                                        <option value="dell">DELL</option>
+                                                        <option value="juniper">Juniper</option>
+                                                        <option value="arista">Arista</option>
+                                                    </select>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">用户名</label>
+                                                    <input type="text" class="form-control" name="username" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">密码</label>
+                                                    <input type="password" class="form-control" name="password" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">端口 (默认22)</label>
+                                                    <input type="number" class="form-control" name="port" value="22">
+                                                </div>
+                                                <button type="submit" class="btn btn-primary w-100">
+                                                    <i class="bi bi-save"></i> 保存设备
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 批量导入区域 -->
+                                    <div class="card mt-4">
+                                        <div class="card-header">
+                                            <h5 class="mb-0"><i class="bi bi-upload"></i> 批量导入设备</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="import-section text-center">
+                                                <i class="bi bi-file-earmark-excel" style="font-size: 3rem; color: #28a745;"></i>
+                                                <h5 class="mt-3">批量导入设备</h5>
+                                                <p class="text-muted">支持Excel格式批量导入设备信息</p>
+                                                
+                                                <div class="file-upload btn btn-success mt-2">
+                                                    <i class="bi bi-upload"></i> 选择Excel文件
+                                                    <input type="file" id="importFile" accept=".xlsx,.xls">
+                                                </div>
+                                                
+                                                <div class="mt-3">
+                                                    <button class="btn btn-outline-primary" onclick="downloadTemplate()">
+                                                        <i class="bi bi-download"></i> 下载导入模板
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            
+                                            <div id="importProgress" style="display: none;">
+                                                <div class="progress mt-3">
+                                                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                                         role="progressbar" style="width: 100%"></div>
+                                                </div>
+                                                <p class="text-center mt-2">正在导入设备...</p>
+                                            </div>
+                                            
+                                            <div id="importResult" class="mt-3" style="display: none;">
+                                                <!-- 导入结果将显示在这里 -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-8">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h5 class="mb-0"><i class="bi bi-list-check"></i> 设备列表</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <div id="devicesList" class="list-group">
+                                                <!-- 设备列表将通过JavaScript动态加载 -->
+                                                <div class="text-center py-5">
+                                                    <div class="spinner-border text-primary" role="status">
+                                                        <span class="visually-hidden">加载中...</span>
+                                                    </div>
+                                                    <p class="mt-3">正在加载设备列表...</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 设备巡检标签页 -->
+                        <div class="tab-pane fade" id="inspection" role="tabpanel">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h5 class="mb-0"><i class="bi bi-play-circle"></i> 巡检设置</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                <label class="form-label">选择设备</label>
+                                                <select class="form-select" id="inspectionDevice">
+                                                    <option value="">请选择设备...</option>
+                                                </select>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">巡检命令</label>
+                                                <div id="inspectionCommands">
+                                                    <!-- 命令列表将通过JavaScript动态加载 -->
+                                                    <div class="text-center py-3">
+                                                        <p>请先选择设备</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">自定义命令</label>
+                                                <div class="input-group mb-2">
+                                                    <input type="text" class="form-control" id="customCommand" placeholder="输入自定义命令">
+                                                    <button class="btn btn-outline-primary" type="button" onclick="addCustomCommand()">
+                                                        <i class="bi bi-plus"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <button class="btn btn-success w-100" onclick="startInspection()">
+                                                <i class="bi bi-play-fill"></i> 开始巡检
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-8">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h5 class="mb-0"><i class="bi bi-terminal"></i> 巡检结果</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <div id="inspectionResults">
+                                                <div class="text-center py-5 text-muted">
+                                                    <i class="bi bi-clipboard" style="font-size: 3rem;"></i>
+                                                    <p class="mt-3">巡检结果将显示在这里</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 配置备份标签页 -->
+                        <div class="tab-pane fade" id="backup" role="tabpanel">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h5 class="mb-0"><i class="bi bi-download"></i> 备份操作</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                <label class="form-label">选择设备</label>
+                                                <select class="form-select" id="backupDevice">
+                                                    <option value="">请选择设备...</option>
+                                                </select>
+                                            </div>
+                                            <button class="btn btn-primary w-100 mb-3" onclick="backupConfig()">
+                                                <i class="bi bi-cloud-arrow-up"></i> 备份配置
+                                            </button>
+                                            
+                                            <hr>
+                                            
+                                            <h6><i class="bi bi-file-zip"></i> 打包备份</h6>
+                                            <div class="mb-3">
+                                                <select class="form-select" id="backupFiles" multiple style="height: 200px;">
+                                                    <!-- 备份文件列表将通过JavaScript动态加载 -->
+                                                </select>
+                                            </div>
+                                            <button class="btn btn-success w-100" onclick="packageBackups()">
+                                                <i class="bi bi-file-earmark-zip"></i> 打包选中文件
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h5 class="mb-0"><i class="bi bi-files"></i> 备份列表</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <div id="backupList">
+                                                <div class="text-center py-5">
+                                                    <div class="spinner-border text-primary" role="status">
+                                                        <span class="visually-hidden">加载中...</span>
+                                                    </div>
+                                                    <p class="mt-3">正在加载备份列表...</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 配置对比标签页 -->
+                        <div class="tab-pane fade" id="compare" role="tabpanel">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h5 class="mb-0"><i class="bi bi-file-earmark-code"></i> 配置文件1</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                <label class="form-label">选择备份文件</label>
+                                                <select class="form-select" id="compareFile1" onchange="loadConfigFile(1)">
+                                                    <option value="">请选择文件...</option>
+                                                </select>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">或手动输入配置</label>
+                                                <textarea class="form-control" id="config1" rows="15" placeholder="输入配置文件内容..." style="font-family: 'Consolas', monospace;"></textarea>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h5 class="mb-0"><i class="bi bi-file-earmark-code"></i> 配置文件2</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                <label class="form-label">选择备份文件</label>
+                                                <select class="form-select" id="compareFile2" onchange="loadConfigFile(2)">
+                                                    <option value="">请选择文件...</option>
+                                                </select>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">或手动输入配置</label>
+                                                <textarea class="form-control" id="config2" rows="15" placeholder="输入配置文件内容..." style="font-family: 'Consolas', monospace;"></textarea>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-12 mt-3">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h5 class="mb-0"><i class="bi bi-arrow-left-right"></i> 对比结果</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <button class="btn btn-primary w-100 mb-3" onclick="compareConfigs()">
+                                                <i class="bi bi-arrow-repeat"></i> 开始对比
+                                            </button>
+                                            <div id="compareResults">
+                                                <div class="text-center py-5 text-muted">
+                                                    <i class="bi bi-file-diff" style="font-size: 3rem;"></i>
+                                                    <p class="mt-3">对比结果将显示在这里</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 加载遮罩 -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // 全局变量
+        let devices = [];
+        let backups = [];
+        let selectedCommands = new Set();
+        
+        // 页面加载完成后执行
+        document.addEventListener('DOMContentLoaded', function() {
+            updateTime();
+            setInterval(updateTime, 1000);
+            
+            loadDevices();
+            loadBackups();
+            
+            // 监听标签页切换
+            document.getElementById('mainTabs').addEventListener('shown.bs.tab', function(event) {
+                const activeTab = event.target.getAttribute('data-bs-target');
+                if (activeTab === '#backup') {
+                    loadBackups();
+                } else if (activeTab === '#compare') {
+                    loadBackups(); // 确保对比标签页也能加载备份文件
+                }
+            });
+            
+            // 监听文件上传
+            document.getElementById('importFile').addEventListener('change', handleFileUpload);
+        });
+        
+        // 更新时间显示
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('current-time').textContent = 
+                now.toLocaleString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+        }
+        
+        // 显示加载动画
+        function showLoading() {
+            document.getElementById('loadingOverlay').style.display = 'flex';
+        }
+        
+        // 隐藏加载动画
+        function hideLoading() {
+            document.getElementById('loadingOverlay').style.display = 'none';
+        }
+        
+        // 显示消息
+        function showMessage(message, type = 'success') {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            const container = document.querySelector('.container');
+            container.insertBefore(alertDiv, container.firstChild);
+            
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 5000);
+        }
+        
+        // 加载设备列表
+        async function loadDevices() {
+            try {
+                const response = await fetch('/api/devices');
+                const data = await response.json();
+                
+                if (data.success) {
+                    devices = data.devices;
+                    renderDevicesList();
+                    updateDeviceSelectors();
+                }
+            } catch (error) {
+                showMessage('加载设备列表失败: ' + error.message, 'danger');
+            }
+        }
+        
+        // 渲染设备列表
+        function renderDevicesList() {
+            const devicesList = document.getElementById('devicesList');
+            
+            if (devices.length === 0) {
+                devicesList.innerHTML = `
+                    <div class="text-center py-5 text-muted">
+                        <i class="bi bi-pc-display-horizontal" style="font-size: 3rem;"></i>
+                        <p class="mt-3">暂无设备，请先添加设备</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '';
+            devices.forEach(device => {
+                html += `
+                    <div class="device-list-item">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-1">${device.name}</h6>
+                                <small class="text-muted">
+                                    <i class="bi bi-ip"></i> ${device.ip}:${device.port} | 
+                                    <i class="bi bi-building"></i> ${device.vendor}
+                                </small>
+                            </div>
+                            <div>
+                                <button class="btn btn-sm btn-outline-primary me-2" onclick="testConnection('${device.id}')">
+                                    <i class="bi bi-plug"></i> 测试连接
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteDevice('${device.id}')">
+                                    <i class="bi bi-trash"></i> 删除
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            devicesList.innerHTML = html;
+        }
+        
+        // 更新设备选择器
+        function updateDeviceSelectors() {
+            const inspectionDevice = document.getElementById('inspectionDevice');
+            const backupDevice = document.getElementById('backupDevice');
+            
+            let options = '<option value="">请选择设备...</option>';
+            devices.forEach(device => {
+                options += `<option value="${device.id}">${device.name} (${device.ip})</option>`;
+            });
+            
+            inspectionDevice.innerHTML = options;
+            backupDevice.innerHTML = options;
+            
+            // 监听设备选择变化
+            inspectionDevice.addEventListener('change', function() {
+                loadInspectionCommands(this.value);
+            });
+        }
+        
+        // 添加设备表单提交
+        document.getElementById('addDeviceForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData.entries());
+            data.port = parseInt(data.port) || 22;
+            
+            showLoading();
+            try {
+                const response = await fetch('/api/devices', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                hideLoading();
+                
+                if (result.success) {
+                    showMessage('设备添加成功');
+                    this.reset();
+                    loadDevices();
+                } else {
+                    showMessage('添加失败: ' + result.message, 'danger');
+                }
+            } catch (error) {
+                hideLoading();
+                showMessage('添加失败: ' + error.message, 'danger');
+            }
+        });
+        
+        // 处理文件上传
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            // 检查文件类型
+            if (!file.name.match(/\.(xlsx|xls)$/i)) {
+                showMessage('请选择Excel文件 (.xlsx 或 .xls)', 'warning');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            // 显示进度
+            document.getElementById('importProgress').style.display = 'block';
+            document.getElementById('importResult').style.display = 'none';
+            
+            try {
+                const response = await fetch('/api/devices/import', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                document.getElementById('importProgress').style.display = 'none';
+                
+                if (result.success) {
+                    showMessage(result.message);
+                    renderImportResult(result.data);
+                    loadDevices(); // 刷新设备列表
+                } else {
+                    showMessage('导入失败: ' + result.message, 'danger');
+                }
+            } catch (error) {
+                document.getElementById('importProgress').style.display = 'none';
+                showMessage('导入失败: ' + error.message, 'danger');
+            }
+            
+            // 重置文件输入
+            event.target.value = '';
+        }
+        
+        // 渲染导入结果
+        function renderImportResult(data) {
+            const container = document.getElementById('importResult');
+            container.style.display = 'block';
+            
+            let html = `
+                <div class="import-result">
+                    <h6>导入结果</h6>
+                    <div class="import-success mb-2">
+                        <i class="bi bi-check-circle"></i> 成功导入: ${data.success} 个设备
+                    </div>
+                    <div class="import-error mb-2">
+                        <i class="bi bi-x-circle"></i> 导入失败: ${data.failed} 个设备
+                    </div>
+            `;
+            
+            if (data.errors && data.errors.length > 0) {
+                html += `<h6 class="mt-3">错误详情:</h6>`;
+                data.errors.forEach(error => {
+                    html += `
+                        <div class="import-error mb-2">
+                            <strong>第 ${error.row} 行:</strong> ${error.error}<br>
+                            <small class="text-muted">${JSON.stringify(error.data)}</small>
+                        </div>
+                    `;
+                });
+            }
+            
+            html += `</div>`;
+            container.innerHTML = html;
+        }
+        
+        // 下载导入模板
+        function downloadTemplate() {
+            window.location.href = '/api/devices/template';
+        }
+        
+        // 删除设备
+        async function deleteDevice(deviceId) {
+            if (!confirm('确定要删除这个设备吗？')) return;
+            
+            showLoading();
+            try {
+                const response = await fetch(`/api/devices/${deviceId}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                hideLoading();
+                
+                if (result.success) {
+                    showMessage('设备删除成功');
+                    loadDevices();
+                } else {
+                    showMessage('删除失败: ' + result.message, 'danger');
+                }
+            } catch (error) {
+                hideLoading();
+                showMessage('删除失败: ' + error.message, 'danger');
+            }
+        }
+        
+        // 测试设备连接
+        async function testConnection(deviceId) {
+            showLoading();
+            try {
+                // 这里可以添加测试连接的API
+                // 暂时使用模拟成功
+                setTimeout(() => {
+                    hideLoading();
+                    showMessage('设备连接测试成功');
+                }, 1000);
+            } catch (error) {
+                hideLoading();
+                showMessage('连接测试失败: ' + error.message, 'danger');
+            }
+        }
+        
+        // 加载巡检命令
+        async function loadInspectionCommands(deviceId) {
+            const device = devices.find(d => d.id === deviceId);
+            if (!device) return;
+            
+            try {
+                const response = await fetch(`/api/inspection/commands?vendor=${device.vendor}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    renderInspectionCommands(data.commands);
+                }
+            } catch (error) {
+                showMessage('加载巡检命令失败: ' + error.message, 'danger');
+            }
+        }
+        
+        // 渲染巡检命令
+        function renderInspectionCommands(commands) {
+            const container = document.getElementById('inspectionCommands');
+            selectedCommands.clear();
+            
+            let html = '';
+            commands.forEach(([command, description], index) => {
+                html += `
+                    <div class="command-item">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" 
+                                   id="cmd${index}" value="${command}" 
+                                   onchange="toggleCommand('${command}', '${description}', this.checked)">
+                            <label class="form-check-label" for="cmd${index}">
+                                <strong>${description}</strong><br>
+                                <small class="text-muted">${command}</small>
+                            </label>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        // 切换命令选择
+        function toggleCommand(command, description, checked) {
+            if (checked) {
+                selectedCommands.add(JSON.stringify([command, description]));
+            } else {
+                selectedCommands.delete(JSON.stringify([command, description]));
+            }
+        }
+        
+        // 添加自定义命令
+        function addCustomCommand() {
+            const commandInput = document.getElementById('customCommand');
+            const command = commandInput.value.trim();
+            
+            if (!command) {
+                showMessage('请输入命令', 'warning');
+                return;
+            }
+            
+            const description = `自定义命令: ${command}`;
+            selectedCommands.add(JSON.stringify([command, description]));
+            
+            // 添加到显示
+            const container = document.getElementById('inspectionCommands');
+            const newItem = document.createElement('div');
+            newItem.className = 'command-item';
+            newItem.innerHTML = `
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" checked 
+                           onchange="toggleCommand('${command}', '${description}', this.checked)">
+                    <label class="form-check-label">
+                        <strong>${description}</strong><br>
+                        <small class="text-muted">${command}</small>
+                    </label>
+                </div>
+            `;
+            container.appendChild(newItem);
+            
+            commandInput.value = '';
+            showMessage('自定义命令已添加');
+        }
+        
+        // 开始巡检
+        async function startInspection() {
+            const deviceId = document.getElementById('inspectionDevice').value;
+            if (!deviceId) {
+                showMessage('请选择设备', 'warning');
+                return;
+            }
+            
+            if (selectedCommands.size === 0) {
+                showMessage('请选择至少一个巡检命令', 'warning');
+                return;
+            }
+            
+            const commands = Array.from(selectedCommands).map(cmd => JSON.parse(cmd));
+            
+            showLoading();
+            try {
+                const response = await fetch('/api/inspection/execute', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        device_id: deviceId,
+                        commands: commands
+                    })
+                });
+                
+                const result = await response.json();
+                hideLoading();
+                
+                if (result.success) {
+                    renderInspectionResults(result.results, result.report_url);
+                    showMessage('巡检完成，报告已生成');
+                } else {
+                    showMessage('巡检失败: ' + result.message, 'danger');
+                }
+            } catch (error) {
+                hideLoading();
+                showMessage('巡检失败: ' + error.message, 'danger');
+            }
+        }
+        
+        // 渲染巡检结果
+        function renderInspectionResults(results, reportUrl) {
+            const container = document.getElementById('inspectionResults');
+            
+            let html = '';
+            results.forEach((result, index) => {
+                // 处理输出，确保显示完整
+                let output = result.output;
+                if (output.length > 10000) {
+                    output = output.substring(0, 10000) + "\n\n...（输出过长，已截断）";
+                }
+                
+                html += `
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6>${result.description}</h6>
+                            <span class="status-badge ${result.success ? 'status-success' : 'status-error'}">
+                                ${result.success ? '成功' : '失败'}
+                            </span>
+                        </div>
+                        <p><small class="text-muted">命令: ${result.command}</small></p>
+                        <div class="output-container">
+                            <pre style="margin: 0;">${escapeHtml(output)}</pre>
+                        </div>
+                        ${index < results.length - 1 ? '<hr>' : ''}
+                    </div>
+                `;
+            });
+            
+            // 添加下载报告按钮
+            html += `
+                <div class="text-center mt-4">
+                    <a href="${reportUrl}" class="btn btn-primary">
+                        <i class="bi bi-download"></i> 下载巡检报告
+                    </a>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+        }
+        
+        // 加载备份列表
+        async function loadBackups() {
+            try {
+                const response = await fetch('/api/backup/list');
+                const data = await response.json();
+                
+                if (data.success) {
+                    backups = data.backups;
+                    renderBackupList();
+                    updateCompareFileSelectors();
+                }
+            } catch (error) {
+                showMessage('加载备份列表失败: ' + error.message, 'danger');
+            }
+        }
+        
+        // 渲染备份列表
+        function renderBackupList() {
+            const container = document.getElementById('backupList');
+            const select = document.getElementById('backupFiles');
+            
+            if (backups.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-5 text-muted">
+                        <i class="bi bi-cloud-slash" style="font-size: 3rem;"></i>
+                        <p class="mt-3">暂无备份文件</p>
+                    </div>
+                `;
+                select.innerHTML = '<option>暂无备份文件</option>';
+                return;
+            }
+            
+            let listHtml = '';
+            let selectHtml = '';
+            
+            backups.forEach(backup => {
+                const date = new Date(backup.modified);
+                const sizeKB = Math.round(backup.size / 1024);
+                
+                listHtml += `
+                    <div class="device-list-item">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-1">${backup.filename}</h6>
+                                <small class="text-muted">
+                                    <i class="bi bi-calendar"></i> ${date.toLocaleString('zh-CN')} | 
+                                    <i class="bi bi-hdd"></i> ${sizeKB} KB | 
+                                    <i class="bi bi-ip"></i> ${backup.device_ip}
+                                </small>
+                            </div>
+                            <div>
+                                <button class="btn btn-sm btn-outline-primary me-2" onclick="downloadBackup('${backup.filename}')">
+                                    <i class="bi bi-download"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-info" onclick="viewBackup('${backup.filename}')">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                selectHtml += `<option value="${backup.filename}">${backup.filename}</option>`;
+            });
+            
+            container.innerHTML = listHtml;
+            select.innerHTML = selectHtml;
+        }
+        
+        // 更新对比文件选择器
+        function updateCompareFileSelectors() {
+            const select1 = document.getElementById('compareFile1');
+            const select2 = document.getElementById('compareFile2');
+            
+            let options = '<option value="">请选择文件...</option>';
+            backups.forEach(backup => {
+                options += `<option value="${backup.filename}">${backup.filename}</option>`;
+            });
+            
+            select1.innerHTML = options;
+            select2.innerHTML = options;
+        }
+        
+        // 备份配置
+        async function backupConfig() {
+            const deviceId = document.getElementById('backupDevice').value;
+            if (!deviceId) {
+                showMessage('请选择设备', 'warning');
+                return;
+            }
+            
+            showLoading();
+            try {
+                const response = await fetch('/api/backup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ device_id: deviceId })
+                });
+                
+                const result = await response.json();
+                hideLoading();
+                
+                if (result.success) {
+                    showMessage('配置备份成功');
+                    loadBackups();
+                } else {
+                    showMessage('备份失败: ' + result.message, 'danger');
+                }
+            } catch (error) {
+                hideLoading();
+                showMessage('备份失败: ' + error.message, 'danger');
+            }
+        }
+        
+        // 打包备份
+        async function packageBackups() {
+            const select = document.getElementById('backupFiles');
+            const selectedFiles = Array.from(select.selectedOptions).map(opt => opt.value);
+            
+            if (selectedFiles.length === 0) {
+                showMessage('请选择要打包的文件', 'warning');
+                return;
+            }
+            
+            showLoading();
+            try {
+                const response = await fetch('/api/backup/package', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ files: selectedFiles })
+                });
+                
+                const result = await response.json();
+                hideLoading();
+                
+                if (result.success) {
+                    showMessage('打包成功');
+                    // 自动下载ZIP文件
+                    window.location.href = result.zip_url;
+                } else {
+                    showMessage('打包失败: ' + result.message, 'danger');
+                }
+            } catch (error) {
+                hideLoading();
+                showMessage('打包失败: ' + error.message, 'danger');
+            }
+        }
+        
+        // 下载备份
+        function downloadBackup(filename) {
+            window.location.href = `/api/backup/download/${filename}`;
+        }
+        
+        // 查看备份
+        async function viewBackup(filename) {
+            try {
+                const response = await fetch(`/api/backup/read/${filename}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    // 在新窗口中显示配置
+                    const newWindow = window.open();
+                    newWindow.document.write(`
+                        <html>
+                        <head>
+                            <title>${filename}</title>
+                            <style>
+                                body { font-family: monospace; white-space: pre-wrap; padding: 20px; background: #1e1e1e; color: #d4d4d4; }
+                                pre { margin: 0; }
+                            </style>
+                        </head>
+                        <body><pre>${escapeHtml(data.content)}</pre></body>
+                        </html>
+                    `);
+                }
+            } catch (error) {
+                showMessage('查看失败: ' + error.message, 'danger');
+            }
+        }
+        
+        // 加载配置文件
+        async function loadConfigFile(num) {
+            const select = document.getElementById(`compareFile${num}`);
+            const filename = select.value;
+            
+            if (!filename) return;
+            
+            try {
+                const response = await fetch(`/api/backup/read/${filename}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById(`config${num}`).value = data.content;
+                }
+            } catch (error) {
+                showMessage('加载配置文件失败: ' + error.message, 'danger');
+            }
+        }
+        
+        // 比较配置文件
+        async function compareConfigs() {
+            const config1 = document.getElementById('config1').value;
+            const config2 = document.getElementById('config2').value;
+            
+            if (!config1 || !config2) {
+                showMessage('请提供两个配置文件', 'warning');
+                return;
+            }
+            
+            showLoading();
+            try {
+                const response = await fetch('/api/compare', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        config1: config1,
+                        config2: config2
+                    })
+                });
+                
+                const result = await response.json();
+                hideLoading();
+                
+                if (result.success) {
+                    renderCompareResults(result.result);
+                } else {
+                    showMessage('比较失败: ' + result.message, 'danger');
+                }
+            } catch (error) {
+                hideLoading();
+                showMessage('比较失败: ' + error.message, 'danger');
+            }
+        }
+        
+        // 渲染比较结果
+        function renderCompareResults(result) {
+            const container = document.getElementById('compareResults');
+            
+            let html = `
+                <div class="mb-3">
+                    <h6>差异统计</h6>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="card text-center">
+                                <div class="card-body">
+                                    <h3 class="text-success">${result.added.length}</h3>
+                                    <p>新增配置</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card text-center">
+                                <div class="card-body">
+                                    <h3class="text-danger">${result.removed.length}</h3>
+                                    <p>删除配置</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card text-center">
+                                <div class="card-body">
+                                    <h3>${result.total_changes}</h3>
+                                    <p>总变化数</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <h6>差异详情</h6>
+                <div class="output-container">
+            `;
+            
+            // 显示差异
+            const diffLines = result.diff.split('\n');
+            diffLines.forEach(line => {
+                if (line.startsWith('+') && !line.startsWith('+++')) {
+                    html += `<div class="diff-added">${escapeHtml(line)}</div>`;
+                } else if (line.startsWith('-') && !line.startsWith('---')) {
+                    html += `<div class="diff-removed">${escapeHtml(line)}</div>`;
+                } else if (line.startsWith('@@')) {
+                    html += `<div style="color: #569cd6;">${escapeHtml(line)}</div>`;
+                } else {
+                    html += `<div>${escapeHtml(line)}</div>`;
+                }
+            });
+            
+            html += `</div>`;
+            container.innerHTML = html;
+        }
+        
+        // HTML转义
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
