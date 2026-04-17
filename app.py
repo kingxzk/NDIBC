@@ -10,8 +10,10 @@ import time
 import zipfile
 import tempfile
 import threading
-import csv
 import io
+import base64
+import sys
+import webbrowser
 from datetime import datetime
 from pathlib import Path
 from flask import Flask, render_template, request, jsonify, send_file, session, send_from_directory
@@ -23,6 +25,7 @@ from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 import difflib
 import hashlib
+import pandas as pd
 
 app = Flask(__name__, 
            static_folder='static',
@@ -143,7 +146,7 @@ class DeviceManager:
         self.save_devices()
         return device_id
     
-    def batch_import_devices(self, devices_data):
+    def batch_import(self, excel_data):
         """批量导入设备"""
         results = {
             'success': 0,
@@ -151,31 +154,49 @@ class DeviceManager:
             'errors': []
         }
         
-        for idx, device_data in enumerate(devices_data, 1):
-            try:
-                # 验证必要字段
-                required_fields = ['name', 'ip', 'vendor', 'username', 'password']
-                for field in required_fields:
-                    if field not in device_data or not device_data[field]:
-                        raise ValueError(f"缺少必要字段: {field}")
-                
-                # 添加设备
-                device_id = self.add_device(
-                    name=device_data['name'],
-                    ip=device_data['ip'],
-                    vendor=device_data['vendor'],
-                    username=device_data['username'],
-                    password=device_data['password'],
-                    port=int(device_data.get('port', 22))
-                )
-                
-                results['success'] += 1
-                
-            except Exception as e:
-                results['failed'] += 1
-                results['errors'].append(f"第{idx}行: {str(e)}")
-        
-        return results
+        try:
+            # 读取Excel数据
+            df = pd.read_excel(io.BytesIO(excel_data))
+            
+            # 检查必要列
+            required_columns = ['设备名称', 'IP地址', '厂商', '用户名', '密码']
+            for col in required_columns:
+                if col not in df.columns:
+                    raise ValueError(f"缺少必要列: {col}")
+            
+            # 处理每一行
+            for index, row in df.iterrows():
+                try:
+                    name = str(row['设备名称']).strip()
+                    ip = str(row['IP地址']).strip()
+                    vendor = str(row['厂商']).strip().lower()
+                    username = str(row['用户名']).strip()
+                    password = str(row['密码']).strip()
+                    port = int(row.get('端口', 22))
+                    
+                    # 验证数据
+                    if not name or not ip or not vendor or not username or not password:
+                        raise ValueError("必要字段不能为空")
+                    
+                    if vendor not in DEVICE_TYPES:
+                        raise ValueError(f"不支持的厂商: {vendor}")
+                    
+                    # 添加设备
+                    device_id = self.add_device(name, ip, vendor, username, password, port)
+                    results['success'] += 1
+                    
+                except Exception as e:
+                    results['failed'] += 1
+                    results['errors'].append({
+                        'row': index + 2,  # Excel行号（从2开始）
+                        'error': str(e),
+                        'data': row.to_dict()
+                    })
+            
+            return True, results
+            
+        except Exception as e:
+            return False, str(e)
     
     def remove_device(self, device_id):
         """删除设备"""
@@ -272,15 +293,53 @@ def create_inspection_report(device_info, inspection_results, output_path):
     """创建巡检报告Word文档"""
     doc = Document()
     
-    # 标题
-    title = doc.add_heading('网络设备巡检报告', 0)
-    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    # 设置文档默认字体
+    style = doc.styles['Normal']
+    font = style.font
+    font.name = '宋体'
+    font.size = Pt(10.5)
+    
+    # 标题 - 安全地创建标题
+    try:
+        title = doc.add_heading('网络设备巡检报告', 0)
+        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        if title.runs:  # 检查是否有runs
+            title_run = title.runs[0]
+            title_run.font.size = Pt(16)
+            title_run.font.bold = True
+        else:
+            # 如果没有runs，手动添加
+            title_run = title.add_run('网络设备巡检报告')
+            title_run.font.size = Pt(16)
+            title_run.font.bold = True
+    except Exception as e:
+        print(f"创建标题时出错: {e}")
+        # 使用段落作为备用
+        title_para = doc.add_paragraph()
+        title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        title_run = title_para.add_run('网络设备巡检报告')
+        title_run.font.size = Pt(16)
+        title_run.font.bold = True
     
     # 基本信息
-    doc.add_heading('设备基本信息', level=1)
+    try:
+        info_heading = doc.add_heading('设备基本信息', level=1)
+        if info_heading.runs:
+            info_heading.runs[0].font.size = Pt(14)
+    except:
+        info_para = doc.add_paragraph()
+        info_run = info_para.add_run('设备基本信息')
+        info_run.font.size = Pt(14)
+        info_run.bold = True
     
     info_table = doc.add_table(rows=4, cols=2)
     info_table.style = 'Light Grid Accent 1'
+    
+    # 设置表格样式
+    for row in info_table.rows:
+        for cell in row.cells:
+            if cell.paragraphs and cell.paragraphs[0].runs:
+                cell.paragraphs[0].runs[0].font.size = Pt(10.5)
     
     info_table.cell(0, 0).text = '设备名称'
     info_table.cell(0, 1).text = device_info.get('name', 'N/A')
@@ -292,31 +351,96 @@ def create_inspection_report(device_info, inspection_results, output_path):
     info_table.cell(3, 1).text = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     # 巡检结果
-    doc.add_heading('巡检结果', level=1)
+    try:
+        results_heading = doc.add_heading('巡检结果', level=1)
+        if results_heading.runs:
+            results_heading.runs[0].font.size = Pt(14)
+    except:
+        results_para = doc.add_paragraph()
+        results_run = results_para.add_run('巡检结果')
+        results_run.font.size = Pt(14)
+        results_run.bold = True
     
-    for result in inspection_results:
-        doc.add_heading(f"巡检项目: {result['description']}", level=2)
-        doc.add_paragraph(f"执行命令: {result['command']}")
+    for i, result in enumerate(inspection_results):
+        try:
+            # 巡检项目标题
+            project_heading = doc.add_heading(f"巡检项目: {result['description']}", level=2)
+            if project_heading.runs:
+                project_heading.runs[0].font.size = Pt(12)
+        except:
+            project_para = doc.add_paragraph()
+            project_run = project_para.add_run(f"巡检项目: {result['description']}")
+            project_run.font.size = Pt(12)
+            project_run.bold = True
         
+        # 执行命令
+        cmd_para = doc.add_paragraph()
+        cmd_run = cmd_para.add_run("执行命令: ")
+        cmd_run.bold = True
+        cmd_para.add_run(result['command'])
+        
+        # 状态
+        status_para = doc.add_paragraph()
+        status_run = status_para.add_run("状态: ")
+        status_run.bold = True
+        status_text = status_para.add_run("成功" if result['success'] else "失败")
         if result['success']:
-            status_para = doc.add_paragraph("状态: ")
-            status_run = status_para.add_run("成功")
-            status_run.font.color.rgb = RGBColor(0, 128, 0)  # 绿色
+            status_text.font.color.rgb = RGBColor(0, 128, 0)  # 绿色
         else:
-            status_para = doc.add_paragraph("状态: ")
-            status_run = status_para.add_run("失败")
-            status_run.font.color.rgb = RGBColor(255, 0, 0)  # 红色
+            status_text.font.color.rgb = RGBColor(255, 0, 0)  # 红色
         
         # 输出结果
-        doc.add_heading('输出结果:', level=3)
-        output_para = doc.add_paragraph(result['output'][:1000])
-        output_para.style = 'Normal'
+        try:
+            output_heading = doc.add_heading('输出结果:', level=3)
+            if output_heading.runs:
+                output_heading.runs[0].font.size = Pt(11)
+        except:
+            output_para = doc.add_paragraph()
+            output_run = output_para.add_run('输出结果:')
+            output_run.font.size = Pt(11)
+            output_run.bold = True
         
-        doc.add_page_break()
+        # 处理长输出，确保显示完整
+        output_text = result['output']
+        if len(output_text) > 10000:  # 限制输出长度
+            output_text = output_text[:10000] + "\n\n...（输出过长，已截断）"
+        
+        # 使用等宽字体显示输出
+        output_para = doc.add_paragraph()
+        output_run = output_para.add_run(output_text)
+        output_run.font.name = 'Consolas'
+        output_run.font.size = Pt(9)
+        
+        # 添加分页符（除了最后一个项目）
+        if i < len(inspection_results) - 1:
+            doc.add_page_break()
     
     # 保存文档
-    doc.save(output_path)
-    return output_path
+    try:
+        doc.save(output_path)
+        return output_path
+    except Exception as e:
+        print(f"保存Word文档时出错: {e}")
+        # 尝试创建简单的文本文件作为备用
+        try:
+            txt_path = output_path.with_suffix('.txt')
+            with open(txt_path, 'w', encoding='utf-8') as f:
+                f.write(f"网络设备巡检报告\n")
+                f.write(f"设备名称: {device_info.get('name', 'N/A')}\n")
+                f.write(f"设备IP: {device_info.get('ip', 'N/A')}\n")
+                f.write(f"巡检时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+                
+                for result in inspection_results:
+                    f.write(f"巡检项目: {result['description']}\n")
+                    f.write(f"执行命令: {result['command']}\n")
+                    f.write(f"状态: {'成功' if result['success'] else '失败'}\n")
+                    f.write(f"输出结果:\n{result['output'][:5000]}\n")
+                    f.write("-" * 50 + "\n")
+            
+            return txt_path
+        except Exception as e2:
+            print(f"创建文本报告也失败: {e2}")
+            return None
 
 def compare_configs(config1, config2):
     """比较两个配置文件"""
@@ -350,49 +474,74 @@ def compare_configs(config1, config2):
     }
 
 def create_import_template():
-    """创建导入模板文件"""
-    template_content = """设备名称,IP地址,设备厂商,用户名,密码,端口
-核心交换机-1,192.168.1.1,cisco,admin,password,22
-接入交换机-1,192.168.1.2,huawei,admin,password,22
-防火墙-1,192.168.1.3,h3c,admin,password,22
-路由器-1,192.168.1.4,ruijie,admin,password,22
-服务器交换机,192.168.1.5,dell,admin,password,22
+    """创建设备导入模板"""
+    # 创建示例数据
+    data = {
+        '设备名称': ['核心交换机-1', '接入交换机-1', '路由器-1'],
+        'IP地址': ['192.168.1.1', '192.168.1.2', '192.168.1.3'],
+        '厂商': ['cisco', 'huawei', 'h3c'],
+        '用户名': ['admin', 'admin', 'admin'],
+        '密码': ['password123', 'huawei@123', 'h3c@123'],
+        '端口': [22, 22, 22],
+        '备注': ['核心设备', '接入层设备', '边界路由器']
+    }
+    
+    df = pd.DataFrame(data)
+    
+    # 保存为Excel文件
+    template_path = TEMPLATE_DIR / "设备导入模板.xlsx"
+    try:
+        with pd.ExcelWriter(template_path, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='设备列表', index=False)
+            
+            # 添加说明工作表
+            instructions = pd.DataFrame({
+                '字段名': ['设备名称', 'IP地址', '厂商', '用户名', '密码', '端口', '备注'],
+                '说明': [
+                    '设备名称，必填',
+                    '设备IP地址，必填',
+                    '设备厂商（cisco/huawei/h3c/ruijie/dell/juniper/arista），必填',
+                    'SSH登录用户名，必填',
+                    'SSH登录密码，必填',
+                    'SSH端口，默认22',
+                    '设备备注信息，可选'
+                ],
+                '示例': [
+                    '核心交换机-1',
+                    '192.168.1.1',
+                    'cisco',
+                    'admin',
+                    'password123',
+                    '22',
+                    '核心设备'
+                ]
+            })
+            instructions.to_excel(writer, sheet_name='填写说明', index=False)
+        
+        return template_path
+    except Exception as e:
+        print(f"创建导入模板时出错: {e}")
+        return None
 
-说明：
-1. 设备厂商可选值：cisco, huawei, h3c, ruijie, dell, juniper, arista
-2. 端口默认为22，如不填写则使用默认值
-3. 所有字段均为必填（端口除外）
-4. 请使用UTF-8编码保存文件
-5. 支持.csv和.xlsx格式
-"""
+def open_browser():
+    """打开浏览器"""
+    url = "http://localhost:8443"
     
-    # 创建CSV模板
-    csv_data = [
-        ['设备名称', 'IP地址', '设备厂商', '用户名', '密码', '端口'],
-        ['核心交换机-1', '192.168.1.1', 'cisco', 'admin', 'password', '22'],
-        ['接入交换机-1', '192.168.1.2', 'huawei', 'admin', 'password', '22'],
-        ['防火墙-1', '192.168.1.3', 'h3c', 'admin', 'password', '22'],
-        ['路由器-1', '192.168.1.4', 'ruijie', 'admin', 'password', '22'],
-        ['服务器交换机', '192.168.1.5', 'dell', 'admin', 'password', '22']
-    ]
+    # 等待服务器启动
+    time.sleep(2)
     
-    template_path = TEMPLATE_DIR / "device_import_template.csv"
-    with open(template_path, 'w', encoding='utf-8-sig', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerows(csv_data)
-    
-    return template_path
+    try:
+        webbrowser.open(url)
+        print(f"✓ 已自动打开浏览器访问: {url}")
+    except Exception as e:
+        print(f"✗ 无法自动打开浏览器: {e}")
+        print(f"请手动访问: {url}")
 
 # API路由
 @app.route('/')
 def index():
     """主页"""
     return render_template('index.html')
-
-@app.route('/compare')
-def compare_page():
-    """配置对比页面"""
-    return render_template('compare.html')
 
 @app.route('/api/devices', methods=['GET'])
 def get_devices():
@@ -424,8 +573,8 @@ def add_device():
         'message': '设备添加成功'
     })
 
-@app.route('/api/devices/batch-import', methods=['POST'])
-def batch_import_devices():
+@app.route('/api/devices/import', methods=['POST'])
+def import_devices():
     """批量导入设备"""
     try:
         if 'file' not in request.files:
@@ -441,42 +590,44 @@ def batch_import_devices():
                 'message': '没有选择文件'
             })
         
-        # 读取CSV文件
-        content = file.read().decode('utf-8-sig')
-        csv_reader = csv.DictReader(io.StringIO(content))
-        
-        devices_data = []
-        for row in csv_reader:
-            devices_data.append({
-                'name': row.get('设备名称', '').strip(),
-                'ip': row.get('IP地址', '').strip(),
-                'vendor': row.get('设备厂商', '').strip().lower(),
-                'username': row.get('用户名', '').strip(),
-                'password': row.get('密码', '').strip(),
-                'port': row.get('端口', '22').strip()
+        if not file.filename.endswith(('.xlsx', '.xls')):
+            return jsonify({
+                'success': False,
+                'message': '只支持Excel文件 (.xlsx, .xls)'
             })
         
-        # 导入设备
+        # 读取文件内容
+        excel_data = file.read()
+        
+        # 批量导入
         manager = DeviceManager()
-        results = manager.batch_import_devices(devices_data)
+        success, result = manager.batch_import(excel_data)
         
-        return jsonify({
-            'success': True,
-            'message': f'批量导入完成，成功: {results["success"]}, 失败: {results["failed"]}',
-            'results': results
-        })
-        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'批量导入完成，成功: {result["success"]}，失败: {result["failed"]}',
+                'data': result
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': f'导入失败: {result}'
+            })
+            
     except Exception as e:
         return jsonify({
             'success': False,
             'message': f'导入失败: {str(e)}'
         })
 
-@app.route('/api/template/download')
+@app.route('/api/devices/template', methods=['GET'])
 def download_template():
     """下载导入模板"""
     template_path = create_import_template()
-    return send_file(template_path, as_attachment=True, download_name='device_import_template.csv')
+    if template_path and template_path.exists():
+        return send_file(template_path, as_attachment=True)
+    return jsonify({'success': False, 'message': '模板文件不存在'}), 404
 
 @app.route('/api/devices/<device_id>', methods=['DELETE'])
 def delete_device(device_id):
@@ -535,13 +686,28 @@ def execute_inspection():
     report_filename = f"{device_info['name']}_{device_info['ip']}_{timestamp}.docx"
     report_path = INSPECTION_DIR / report_filename
     
-    create_inspection_report(device_info, results, report_path)
-    
-    return jsonify({
-        'success': True,
-        'results': results,
-        'report_url': f'/api/reports/download/{report_filename}'
-    })
+    try:
+        report_file = create_inspection_report(device_info, results, report_path)
+        
+        if report_file:
+            return jsonify({
+                'success': True,
+                'results': results,
+                'report_url': f'/api/reports/download/{report_filename}'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': '生成报告失败',
+                'results': results
+            })
+    except Exception as e:
+        print(f"生成巡检报告时出错: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'生成报告时出错: {str(e)}',
+            'results': results
+        })
 
 @app.route('/api/backup', methods=['POST'])
 def backup_config():
@@ -652,7 +818,14 @@ def compare_config():
 @app.route('/api/reports/download/<filename>')
 def download_report(filename):
     """下载巡检报告"""
+    # 尝试查找Word文档
     filepath = INSPECTION_DIR / filename
+    
+    # 如果Word文档不存在，尝试查找文本文件
+    if not filepath.exists():
+        txt_filename = filename.replace('.docx', '.txt')
+        filepath = INSPECTION_DIR / txt_filename
+    
     if filepath.exists():
         return send_file(filepath, as_attachment=True)
     return jsonify({'success': False, 'message': '文件不存在'}), 404
@@ -678,12 +851,83 @@ def read_backup(filename):
         })
     return jsonify({'success': False, 'message': '文件不存在'}), 404
 
-if __name__ == '__main__':
-    print("网络设备巡检和配置备份软件启动中...")
-    print(f"访问地址: https://localhost:8443")
-    print("配置对比页面: https://localhost:8443/compare")
-    print("按 Ctrl+C 停止服务")
+@app.route('/static/<path:filename>')
+def static_files(filename):
+    """提供静态文件"""
+    return send_from_directory('static', filename)
+
+def print_banner():
+    """打印程序横幅"""
+    banner = """
+╔══════════════════════════════════════════════════════════════╗
+║                                                              ║
+║     网络设备巡检和配置备份软件 v1.0                         ║
+║     Network Device Inspection & Backup Software             ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╝
+    """
+    print(banner)
+
+def main():
+    """主函数"""
+    # 打印程序横幅
+    print_banner()
     
-    # 使用waitress作为生产服务器
-    from waitress import serve
-    serve(app, host='0.0.0.0', port=8443)
+    print("=" * 60)
+    print("程序启动中...")
+    print(f"启动时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("-" * 60)
+    
+    # 检查必要目录
+    print("检查系统目录...")
+    for directory in [CONFIG_DIR, INSPECTION_DIR, TEMPLATE_DIR]:
+        directory.mkdir(exist_ok=True)
+        print(f"  ✓ {directory.name}: {directory}")
+    
+    # 创建设备导入模板
+    print("创建设备导入模板...")
+    template_path = create_import_template()
+    if template_path:
+        print(f"  ✓ 模板已创建: {template_path}")
+    else:
+        print("  ✗ 模板创建失败")
+    
+    # 加载设备数据
+    print("加载设备数据...")
+    manager = DeviceManager()
+    device_count = len(manager.get_all_devices())
+    print(f"  ✓ 已加载 {device_count} 个设备")
+    
+    print("-" * 60)
+    print("启动Web服务器...")
+    print(f"Web服务端口: 8443")
+    print(f"访问地址: http://localhost:8443")
+    print("-" * 60)
+    
+    # 在新线程中打开浏览器
+    browser_thread = threading.Thread(target=open_browser, daemon=True)
+    browser_thread.start()
+    
+    # 启动服务器
+    try:
+        from waitress import serve
+        print("服务器已启动，按 Ctrl+C 停止服务")
+        print("=" * 60)
+        print("日志信息:")
+        print("-" * 60)
+        
+        # 启动服务器
+        serve(app, host='0.0.0.0', port=8443)
+        
+    except KeyboardInterrupt:
+        print("\n" + "-" * 60)
+        print("收到停止信号，正在关闭服务器...")
+        print("程序已停止")
+        print("=" * 60)
+    except Exception as e:
+        print(f"\n服务器启动失败: {e}")
+        print("按任意键退出...")
+        input()
+
+if __name__ == '__main__':
+    main()
