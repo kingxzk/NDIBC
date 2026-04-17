@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 网络设备巡检和配置备份软件 - 启动脚本
-用于EXE打包后的启动
 """
 
 import os
@@ -16,8 +15,8 @@ def print_logo():
     logo = """
     ╔══════════════════════════════════════════════════════════════╗
     ║                                                              ║
-    ║     网络设备巡检和配置备份软件 v1.0                         ║
-    ║     Network Device Inspection & Backup Software             ║
+    ║     网络设备巡检和配置备份软件 v0.4                           ║
+    ║     Network Device Inspection & Backup & Compare Tools       ║
     ║                                                              ║
     ╚══════════════════════════════════════════════════════════════╝
     
